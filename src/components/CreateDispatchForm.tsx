@@ -401,7 +401,7 @@ function PackageTypeSelect({
       </span>
 
       <Listbox
-        value={value === "" ? null : value}
+        value={value === "" ? undefined : value}
         onChange={(next: PackageType) => {
           handleSelect(next);
         }}
