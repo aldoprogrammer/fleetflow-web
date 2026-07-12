@@ -26,4 +26,16 @@ export function getApiBaseUrl(): string {
 export const env = {
   apiBaseUrl: getApiBaseUrl(),
   ordersEndpoint: `${getApiBaseUrl()}/orders`,
+  apiKey: process.env.NEXT_PUBLIC_API_KEY ?? "ff_live_merchant_acme_7f3c9a2e",
+} as const;
+
+export const JAKARTA_COORDINATES = {
+  pickup: {
+    latitude: -6.2,
+    longitude: 106.816666,
+  },
+  delivery: {
+    latitude: -6.17511,
+    longitude: 106.865036,
+  },
 } as const;

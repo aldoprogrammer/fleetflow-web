@@ -2,132 +2,103 @@
 
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { Form, Formik, type FormikHelpers } from "formik";
-import { Loader2, MapPin, Package, Scale } from "lucide-react";
-import { useId, useState, type ReactElement } from "react";
-import * as Yup from "yup";
+import { Building2, Truck, Weight } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type ReactElement } from "react";
+import { AddressLocationField } from "@/components/orders/AddressLocationField";
+import { ParcelContentsField } from "@/components/orders/ParcelContentsField";
+import { OrderPriceEstimateCard } from "@/components/orders/OrderPriceEstimateCard";
 import {
-  PACKAGE_TYPES,
+  buildCreateOrderPayload,
+  buildCreateOrderValidationSchema,
+  collectCreateOrderValidationMessages,
+  normalizeWeightInput,
+  touchAllCreateOrderFields,
+  type CreateOrderFormValues,
+} from "@/components/orders/create-order-form.utils";
+import { SubmitButton } from "@/components/ui/SubmitButton";
+import { useAppNavigation } from "@/hooks/useAppNavigation";
+import { listMerchants, type MerchantSummary } from "@/lib/api/merchants";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { JAKARTA_COORDINATES } from "@/lib/env";
+import {
   createOrder,
   extractApiErrorMessage,
-  type ApiPackageType,
-  type CreateOrderPayload,
 } from "@/lib/api/orders";
+import { useAuthStore } from "@/stores/auth-store";
 
-export const MOCK_MERCHANT_ID = "550e8400-e29b-41d4-a716-446655440001";
-
-interface CreateOrderFormValues {
-  merchantId: string;
-  pickupAddress: string;
-  deliveryAddress: string;
-  packageWeight: number | "";
-  packageType: ApiPackageType | "";
-}
-
-const initialValues: CreateOrderFormValues = {
-  merchantId: MOCK_MERCHANT_ID,
-  pickupAddress: "",
-  deliveryAddress: "",
-  packageWeight: "",
-  packageType: "",
+const baseInitialValues: CreateOrderFormValues = {
+  merchantId: "",
+  vehicleTypeRequired: "BIKE",
+  parcelContents: ["electronics"],
+  packageWeightKg: "",
+  pickupAddress: "Jl. Thamrin No. 1, Jakarta Pusat",
+  deliveryAddress: "Jl. Sudirman No. 52, Jakarta Selatan",
+  pickupLat: JAKARTA_COORDINATES.pickup.latitude,
+  pickupLng: JAKARTA_COORDINATES.pickup.longitude,
+  deliveryLat: JAKARTA_COORDINATES.delivery.latitude,
+  deliveryLng: JAKARTA_COORDINATES.delivery.longitude,
 };
 
-const createOrderSchema = Yup.object({
-  merchantId: Yup.string()
-    .uuid("Merchant ID must be a valid UUID.")
-    .required("Merchant ID is required."),
-  pickupAddress: Yup.string()
-    .trim()
-    .min(8, "Pickup address must be at least 8 characters.")
-    .max(240, "Pickup address must be 240 characters or fewer.")
-    .required("Pickup address is required."),
-  deliveryAddress: Yup.string()
-    .trim()
-    .min(8, "Delivery address must be at least 8 characters.")
-    .max(240, "Delivery address must be 240 characters or fewer.")
-    .required("Delivery address is required.")
-    .test(
-      "addresses-differ",
-      "Delivery address must differ from pickup address.",
-      function addressesDiffer(value: string | undefined): boolean {
-        const pickup = String(this.parent.pickupAddress ?? "");
-        if (!value || !pickup) return true;
-        return value.trim().toLowerCase() !== pickup.trim().toLowerCase();
-      },
-    ),
-  packageWeight: Yup.mixed<number | "">()
-    .required("Package weight is required.")
-    .test(
-      "is-number",
-      "Package weight must be a number.",
-      (value) =>
-        value !== "" && typeof value === "number" && !Number.isNaN(value),
-    )
-    .test(
-      "min-weight",
-      "Package weight must be at least 0.1 kg.",
-      (value) => typeof value !== "number" || value >= 0.1,
-    )
-    .test(
-      "max-weight",
-      "Package weight cannot exceed 1,000 kg.",
-      (value) => typeof value !== "number" || value <= 1000,
-    ),
-  packageType: Yup.mixed<ApiPackageType | "">()
-    .required("Package type is required.")
-    .test(
-      "valid-type",
-      "Select a valid package type.",
-      (value): value is ApiPackageType =>
-        value !== "" && (PACKAGE_TYPES as readonly string[]).includes(value),
-    ),
-});
-
-function FieldError({
-  id,
-  message,
-}: {
-  id: string;
-  message?: string;
-}): ReactElement {
-  const [parent] = useAutoAnimate<HTMLDivElement>({ duration: 200 });
-
+function canDelegateMerchant(permissions: readonly string[]): boolean {
   return (
-    <div ref={parent} className="min-h-[1.25rem]" aria-live="polite">
-      {message ? (
-        <p id={id} role="alert" className="mt-1.5 text-sm font-medium text-rose-600">
-          {message}
-        </p>
-      ) : null}
+    permissions.includes(PERMISSIONS.MERCHANTS_MANAGE) ||
+    permissions.includes(PERMISSIONS.ORDERS_READ_ALL)
+  );
+}
+
+function FieldError({ message }: { message?: string }): ReactElement | null {
+  const [parent] = useAutoAnimate<HTMLDivElement>({ duration: 180 });
+  if (!message) return <div ref={parent} className="min-h-[1.25rem]" />;
+  return (
+    <div ref={parent} className="min-h-[1.25rem]">
+      <p role="alert" className="mt-1.5 text-sm font-medium text-rose-600">
+        {message}
+      </p>
     </div>
   );
 }
 
 export function CreateOrderForm(): ReactElement {
   const formId = useId();
+  const { push } = useAppNavigation();
+  const session = useAuthStore((state) => state.session);
   const [alertParent] = useAutoAnimate<HTMLDivElement>({ duration: 220 });
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [merchants, setMerchants] = useState<MerchantSummary[]>([]);
+  const [isMerchantsLoading, setIsMerchantsLoading] = useState(false);
+
+  const linkedMerchantId = session?.user.merchantId ?? null;
+  const permissions = session?.user.permissions ?? [];
+  const needsMerchantSelect =
+    !linkedMerchantId && canDelegateMerchant(permissions);
+  const validationSchema = useMemo(
+    () => buildCreateOrderValidationSchema(needsMerchantSelect),
+    [needsMerchantSelect],
+  );
+
+  useEffect(() => {
+    if (!needsMerchantSelect) return;
+
+    setIsMerchantsLoading(true);
+    void listMerchants()
+      .then((items) => {
+        setMerchants(items);
+      })
+      .catch(() => setMerchants([]))
+      .finally(() => setIsMerchantsLoading(false));
+  }, [needsMerchantSelect]);
 
   const handleSubmit = async (
     values: CreateOrderFormValues,
     helpers: FormikHelpers<CreateOrderFormValues>,
   ): Promise<void> => {
-    setSuccessMessage(null);
     setErrorMessage(null);
 
-    const payload: CreateOrderPayload = {
-      merchantId: values.merchantId,
-      pickupAddress: values.pickupAddress.trim(),
-      deliveryAddress: values.deliveryAddress.trim(),
-      packageWeight: Number(values.packageWeight),
-      packageType: values.packageType as ApiPackageType,
-    };
-
     try {
-      const order = await createOrder(payload);
-      setSuccessMessage("Order Created Successfully!");
-      helpers.resetForm({ values: initialValues });
-      helpers.setStatus({ orderId: order.id });
+      const order = await createOrder(
+        buildCreateOrderPayload(values, needsMerchantSelect),
+      );
+      push(`/orders/${order.id}`);
     } catch (error) {
       setErrorMessage(extractApiErrorMessage(error));
     } finally {
@@ -136,43 +107,30 @@ export function CreateOrderForm(): ReactElement {
   };
 
   return (
-    <section className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm sm:p-8">
-      <header className="mb-8 space-y-2 border-b border-slate-100 pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
-          FleetFlow Dispatch
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Create order
-        </h1>
-        <p className="text-sm leading-relaxed text-slate-600">
-          Submit a new delivery dispatch to the FleetFlow API. The order will be
-          queued for driver matching automatically.
+    <section className="relative mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <header className="mb-6 border-b border-slate-100 pb-5">
+        <h1 className="text-2xl font-semibold text-slate-900">Create dispatch order</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Pick pickup and delivery on the map. Parcel details are optional but help drivers prepare.
         </p>
       </header>
 
-      <div ref={alertParent} className="mb-6 space-y-3">
-        {successMessage ? (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800"
-          >
-            {successMessage}
-          </div>
-        ) : null}
+      <div ref={alertParent} className="mb-4">
         {errorMessage ? (
-          <div
-            role="alert"
-            className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
-          >
+          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {errorMessage}
           </div>
         ) : null}
       </div>
 
-      <Formik<CreateOrderFormValues>
-        initialValues={initialValues}
-        validationSchema={createOrderSchema}
-        validateOnBlur
+      <Formik
+        initialValues={{
+          ...baseInitialValues,
+          merchantId: linkedMerchantId ?? merchants[0]?.id ?? "",
+        }}
+        enableReinitialize
+        validationSchema={validationSchema}
+        validateOnBlur={false}
         validateOnChange={false}
         onSubmit={handleSubmit}
       >
@@ -181,236 +139,207 @@ export function CreateOrderForm(): ReactElement {
           errors,
           touched,
           isSubmitting,
+          submitCount,
           handleChange,
           handleBlur,
           setFieldValue,
-        }) => (
-          <Form noValidate className="space-y-5" aria-busy={isSubmitting}>
-            <input type="hidden" name="merchantId" value={values.merchantId} />
+          setFieldTouched,
+          setTouched,
+          submitForm,
+        }) => {
+          const validationMessages =
+            submitCount > 0 ? collectCreateOrderValidationMessages(errors) : [];
 
-            <div className="space-y-1.5">
-              <label
-                htmlFor={`${formId}-pickup`}
-                className="text-sm font-semibold text-slate-800"
-              >
-                Pickup address
-              </label>
-              <div className="relative">
-                <MapPin
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                  aria-hidden
-                />
-                <input
-                  id={`${formId}-pickup`}
-                  name="pickupAddress"
-                  type="text"
-                  value={values.pickupAddress}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="Jl. Thamrin No. 1, Jakarta"
-                  autoComplete="street-address"
-                  aria-invalid={Boolean(touched.pickupAddress && errors.pickupAddress)}
-                  aria-describedby={
-                    touched.pickupAddress && errors.pickupAddress
-                      ? `${formId}-pickup-error`
-                      : undefined
-                  }
-                  className={[
-                    "w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-offset-1",
-                    touched.pickupAddress && errors.pickupAddress
-                      ? "border-rose-400 focus-visible:ring-rose-400"
-                      : "border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/40",
-                  ].join(" ")}
-                />
-              </div>
-              <FieldError
-                id={`${formId}-pickup-error`}
-                message={
-                  touched.pickupAddress ? errors.pickupAddress : undefined
-                }
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                htmlFor={`${formId}-delivery`}
-                className="text-sm font-semibold text-slate-800"
-              >
-                Delivery address
-              </label>
-              <div className="relative">
-                <MapPin
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                  aria-hidden
-                />
-                <input
-                  id={`${formId}-delivery`}
-                  name="deliveryAddress"
-                  type="text"
-                  value={values.deliveryAddress}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="Jl. Sudirman No. 52, Jakarta"
-                  autoComplete="street-address"
-                  aria-invalid={Boolean(
-                    touched.deliveryAddress && errors.deliveryAddress,
-                  )}
-                  aria-describedby={
-                    touched.deliveryAddress && errors.deliveryAddress
-                      ? `${formId}-delivery-error`
-                      : undefined
-                  }
-                  className={[
-                    "w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-offset-1",
-                    touched.deliveryAddress && errors.deliveryAddress
-                      ? "border-rose-400 focus-visible:ring-rose-400"
-                      : "border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/40",
-                  ].join(" ")}
-                />
-              </div>
-              <FieldError
-                id={`${formId}-delivery-error`}
-                message={
-                  touched.deliveryAddress ? errors.deliveryAddress : undefined
-                }
-              />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor={`${formId}-weight`}
-                  className="text-sm font-semibold text-slate-800"
-                >
-                  Package weight (kg)
-                </label>
-                <div className="relative">
-                  <Scale
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
-                  <input
-                    id={`${formId}-weight`}
-                    name="packageWeight"
-                    type="number"
-                    inputMode="decimal"
-                    min={0.1}
-                    max={1000}
-                    step={0.1}
-                    value={values.packageWeight}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      void setFieldValue(
-                        "packageWeight",
-                        next === "" ? "" : Number(next),
-                      );
-                    }}
-                    onBlur={handleBlur}
-                    placeholder="2.5"
-                    aria-invalid={Boolean(
-                      touched.packageWeight && errors.packageWeight,
-                    )}
-                    aria-describedby={
-                      touched.packageWeight && errors.packageWeight
-                        ? `${formId}-weight-error`
-                        : undefined
+          return (
+            <Form className="space-y-5 pb-2" noValidate>
+              {needsMerchantSelect ? (
+                <div>
+                  <label htmlFor={`${formId}-merchant`} className="text-sm font-semibold text-slate-800">
+                    Merchant account
+                  </label>
+                  <div className="relative mt-1.5">
+                    <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <select
+                      id={`${formId}-merchant`}
+                      name="merchantId"
+                      value={values.merchantId}
+                      onChange={(event) => {
+                        handleChange(event);
+                        setErrorMessage(null);
+                      }}
+                      onBlur={handleBlur}
+                      disabled={isMerchantsLoading}
+                      className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:opacity-60"
+                    >
+                      <option value="">
+                        {isMerchantsLoading ? "Loading merchants..." : "Select merchant"}
+                      </option>
+                      {merchants.map((merchant) => (
+                        <option key={merchant.id} value={merchant.id}>
+                          {merchant.companyName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <FieldError
+                    message={
+                      touched.merchantId || submitCount > 0 ? errors.merchantId : undefined
                     }
-                    className={[
-                      "w-full rounded-xl border bg-white py-3 pl-10 pr-3 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-offset-1",
-                      touched.packageWeight && errors.packageWeight
-                        ? "border-rose-400 focus-visible:ring-rose-400"
-                        : "border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/40",
-                    ].join(" ")}
                   />
                 </div>
-                <FieldError
-                  id={`${formId}-weight-error`}
-                  message={
-                    touched.packageWeight ? errors.packageWeight : undefined
-                  }
-                />
-              </div>
+              ) : null}
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor={`${formId}-type`}
-                  className="text-sm font-semibold text-slate-800"
-                >
-                  Package type
+              <div>
+                <label htmlFor={`${formId}-vehicle`} className="text-sm font-semibold text-slate-800">
+                  Vehicle type required
                 </label>
-                <div className="relative">
-                  <Package
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                    aria-hidden
-                  />
+                <div className="relative mt-1.5">
+                  <Truck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <select
-                    id={`${formId}-type`}
-                    name="packageType"
-                    value={values.packageType}
+                    id={`${formId}-vehicle`}
+                    name="vehicleTypeRequired"
+                    value={values.vehicleTypeRequired}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    aria-invalid={Boolean(
-                      touched.packageType && errors.packageType,
-                    )}
-                    aria-describedby={
-                      touched.packageType && errors.packageType
-                        ? `${formId}-type-error`
-                        : undefined
-                    }
-                    className={[
-                      "w-full appearance-none rounded-xl border bg-white py-3 pl-10 pr-8 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-offset-1",
-                      touched.packageType && errors.packageType
-                        ? "border-rose-400 focus-visible:ring-rose-400"
-                        : "border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/40",
-                      values.packageType ? "text-slate-900" : "text-slate-400",
-                    ].join(" ")}
+                    className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   >
                     <option value="" disabled>
-                      Select package type
+                      Select vehicle type
                     </option>
-                    {PACKAGE_TYPES.map((type) => (
+                    {["BIKE", "CAR", "TRUCK"].map((type) => (
                       <option key={type} value={type}>
-                        {type.charAt(0) + type.slice(1).toLowerCase()}
+                        {type}
                       </option>
                     ))}
                   </select>
                 </div>
                 <FieldError
-                  id={`${formId}-type-error`}
-                  message={touched.packageType ? errors.packageType : undefined}
+                  message={
+                    touched.vehicleTypeRequired || submitCount > 0
+                      ? errors.vehicleTypeRequired
+                      : undefined
+                  }
                 />
               </div>
-            </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
-              <button
-                type="reset"
-                disabled={isSubmitting}
-                onClick={() => {
-                  setSuccessMessage(null);
-                  setErrorMessage(null);
+              <ParcelContentsField
+                formId={formId}
+                selectedIds={values.parcelContents}
+                onChange={(next) => void setFieldValue("parcelContents", next)}
+                onBlur={() => void setFieldTouched("parcelContents", true)}
+              />
+
+              <div>
+                <label htmlFor={`${formId}-weight`} className="text-sm font-semibold text-slate-800">
+                  Parcel weight (kg) <span className="font-normal text-slate-500">(optional)</span>
+                </label>
+                <div className="relative mt-1.5">
+                  <Weight className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id={`${formId}-weight`}
+                    name="packageWeightKg"
+                    type="text"
+                    inputMode="decimal"
+                    value={normalizeWeightInput(values.packageWeightKg)}
+                    onChange={(event) => {
+                      void setFieldValue("packageWeightKg", event.target.value);
+                      setErrorMessage(null);
+                    }}
+                    onBlur={handleBlur}
+                    placeholder="e.g. 4.5"
+                    className="w-full rounded-xl border border-slate-200 py-3 pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  />
+                </div>
+                <FieldError
+                  message={
+                    touched.packageWeightKg || submitCount > 0
+                      ? errors.packageWeightKg
+                      : undefined
+                  }
+                />
+              </div>
+
+              <AddressLocationField
+                label="Pickup address"
+                addressId={`${formId}-pickupAddress`}
+                addressName="pickupAddress"
+                addressValue={values.pickupAddress}
+                lat={values.pickupLat}
+                lng={values.pickupLng}
+                error={errors.pickupAddress}
+                touched={Boolean(touched.pickupAddress) || submitCount > 0}
+                onAddressChange={handleChange}
+                onAddressBlur={handleBlur}
+                defaultCenter={{
+                  lat: JAKARTA_COORDINATES.pickup.latitude,
+                  lng: JAKARTA_COORDINATES.pickup.longitude,
                 }}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                onLocationSelect={(address, position) => {
+                  void setFieldValue("pickupAddress", address);
+                  void setFieldValue("pickupLat", position.lat);
+                  void setFieldValue("pickupLng", position.lng);
+                }}
+              />
+
+              <AddressLocationField
+                label="Delivery address"
+                addressId={`${formId}-deliveryAddress`}
+                addressName="deliveryAddress"
+                addressValue={values.deliveryAddress}
+                lat={values.deliveryLat}
+                lng={values.deliveryLng}
+                error={errors.deliveryAddress}
+                touched={Boolean(touched.deliveryAddress) || submitCount > 0}
+                onAddressChange={handleChange}
+                onAddressBlur={handleBlur}
+                defaultCenter={{
+                  lat: JAKARTA_COORDINATES.delivery.latitude,
+                  lng: JAKARTA_COORDINATES.delivery.longitude,
+                }}
+                onLocationSelect={(address, position) => {
+                  void setFieldValue("deliveryAddress", address);
+                  void setFieldValue("deliveryLat", position.lat);
+                  void setFieldValue("deliveryLng", position.lng);
+                }}
+              />
+
+              <OrderPriceEstimateCard
+                vehicleTypeRequired={values.vehicleTypeRequired}
+                pickupLat={values.pickupLat}
+                pickupLng={values.pickupLng}
+                deliveryLat={values.deliveryLat}
+                deliveryLng={values.deliveryLng}
+              />
+
+              {validationMessages.length > 0 ? (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                >
+                  <p className="font-semibold">Please complete the required fields:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {validationMessages.map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <SubmitButton
+                type="button"
+                loading={isSubmitting}
+                loadingLabel="Creating order..."
+                onClick={() => {
+                  void setTouched(touchAllCreateOrderFields());
+                  void submitForm();
+                }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Clear
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    Creating order…
-                  </>
-                ) : (
-                  "Create order"
-                )}
-              </button>
-            </div>
-          </Form>
-        )}
+                Create order
+              </SubmitButton>
+            </Form>
+          );
+        }}
       </Formik>
     </section>
   );
