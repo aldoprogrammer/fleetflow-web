@@ -31,6 +31,12 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     mode: "all",
   },
   {
+    pattern: /^\/notifications$/,
+    label: "Notifications",
+    permissions: [PERMISSIONS.NOTIFICATIONS_READ],
+    mode: "all",
+  },
+  {
     pattern: /^\/orders\/create$/,
     label: "Create order",
     permissions: [PERMISSIONS.ORDERS_CREATE],
@@ -106,6 +112,14 @@ export const NAV_ITEMS: NavItemConfig[] = [
     label: "Dashboard",
     icon: "dashboard",
     permissions: [],
+    mode: "all",
+    group: "core",
+  },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    icon: "notifications",
+    permissions: [PERMISSIONS.NOTIFICATIONS_READ],
     mode: "all",
     group: "core",
   },

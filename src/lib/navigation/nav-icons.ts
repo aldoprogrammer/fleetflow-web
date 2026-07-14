@@ -1,4 +1,5 @@
 import {
+  Bell,
   Building2,
   LayoutDashboard,
   PackagePlus,
@@ -14,6 +15,7 @@ import type { NavItemConfig } from "@/lib/auth/access";
 
 export const NAV_ICONS: Record<NavItemConfig["icon"], LucideIcon> = {
   dashboard: LayoutDashboard,
+  notifications: Bell,
   create: PackagePlus,
   track: Search,
   orders: ScrollText,

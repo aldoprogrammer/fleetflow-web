@@ -1,6 +1,7 @@
 "use client";
 
 import { AppLink } from "@/components/ui/AppLink";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { PageContentSkeleton } from "@/components/ui/skeletons/PageContentSkeleton";
 import { usePathname, useRouter } from "next/navigation";
 import { Loader2, LogOut, Truck } from "lucide-react";
@@ -160,15 +161,18 @@ export function PortalShell({ children }: PortalShellProps): ReactElement {
                 </span>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              aria-busy={isLoggingOut}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {logoutButtonContent}
-            </button>
+            <div className="flex items-center gap-2">
+              <NotificationBell />
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                aria-busy={isLoggingOut}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {logoutButtonContent}
+              </button>
+            </div>
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
