@@ -22,7 +22,14 @@ interface OrderTrackerProps {
 }
 
 const TERMINAL_STATUSES: ApiOrderStatus[] = ["DELIVERED", "CANCELLED"];
-const POLLING_STATUSES: ApiOrderStatus[] = ["DRAFT", "PENDING", "MATCHING"];
+/** Keep polling through in-trip statuses so merchant/web sees Flutter pickup/deliver live. */
+const POLLING_STATUSES: ApiOrderStatus[] = [
+  "DRAFT",
+  "PENDING",
+  "MATCHING",
+  "ASSIGNED",
+  "PICKED_UP",
+];
 
 function shouldPollStatus(status: ApiOrderStatus): boolean {
   return POLLING_STATUSES.includes(status);

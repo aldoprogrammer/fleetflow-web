@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { AppLink } from "@/components/ui/AppLink";
 import { PageSection } from "@/components/ui/PageSection";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -9,21 +9,37 @@ import { listOrders, type OrderListItem } from "@/lib/api/orders";
 import { useAuthStore } from "@/stores/auth-store";
 
 const ACTIVE_STATUSES = new Set(["ASSIGNED", "PICKED_UP", "MATCHING", "PENDING"]);
+const POLL_MS = 5_000;
 
 export function DriverAssignedOrdersPanel(): ReactElement {
   const session = useAuthStore((state) => state.session);
   const [orders, setOrders] = useState<OrderListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void listOrders()
-      .then((items) =>
-        setOrders(items.filter((order) => ACTIVE_STATUSES.has(order.status))),
-      )
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load trips."),
-      );
+  const load = useCallback(async () => {
+    try {
+      const items = await listOrders();
+      setOrders(items.filter((order) => ACTIVE_STATUSES.has(order.status)));
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load trips.");
+    }
   }, []);
+
+  useEffect(() => {
+    if (!session?.user.driverId) {
+      return;
+    }
+
+    void load();
+    const intervalId = window.setInterval(() => {
+      void load();
+    }, POLL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [load, session?.user.driverId]);
 
   if (!session?.user.driverId) {
     return (
@@ -54,7 +70,7 @@ export function DriverAssignedOrdersPanel(): ReactElement {
   return (
     <PageSection
       title="Your assigned trips"
-      description="Open a trip to confirm pickup and mark delivery complete."
+      description="Open a trip to confirm pickup and mark delivery complete. List refreshes every 5 seconds."
     >
       {orders.length === 0 ? (
         <p className="text-sm text-slate-600">No active trips right now.</p>

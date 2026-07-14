@@ -36,7 +36,7 @@ pnpm run dev    # http://localhost:3001
 
 API must run at `http://localhost:3000` (see `fleetflow-infra` + `fleetflow-api`).
 
-
+**End-to-end demo (merchant create → matcher → Flutter pickup/deliver → live tracker):** [DEMO_E2E.md](../fleetflow-docs/DEMO_E2E.md)
 
 ## Features
 

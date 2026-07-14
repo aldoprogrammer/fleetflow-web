@@ -50,6 +50,9 @@ export interface AssignedDriverSummary {
   fullName: string;
   phone: string;
   vehicleType: ApiVehicleType;
+  /** Last known GPS (seed location until live ping is added). */
+  currentLat?: number;
+  currentLng?: number;
 }
 
 export type ApiOrderPaymentStatus = "PAID" | "UNPAID" | "NOT_CHARGED";

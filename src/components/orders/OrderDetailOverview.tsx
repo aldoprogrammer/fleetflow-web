@@ -15,6 +15,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OrderOperationsPanel } from "@/components/orders/OrderOperationsPanel";
+import { OrderTripMap } from "@/components/orders/OrderTripMap";
 import type { OrderResponse } from "@/lib/api/orders";
 import {
   formatDateTime,
@@ -158,10 +159,6 @@ export function OrderDetailOverview({
                 {routeKm > 0 ? `${routeKm.toFixed(2)} km route` : "Route pending"}
               </span>
             </div>
-
-            {onOrderUpdated ? (
-              <OrderOperationsPanel order={order} onUpdated={onOrderUpdated} />
-            ) : null}
           </div>
 
           <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
@@ -194,6 +191,22 @@ export function OrderDetailOverview({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="space-y-4 border-b border-slate-100 p-5 sm:p-6">
+        <OrderTripMap
+          pickupLat={order.pickupLat}
+          pickupLng={order.pickupLng}
+          deliveryLat={order.deliveryLat}
+          deliveryLng={order.deliveryLng}
+          pickupLabel={order.pickupAddress}
+          deliveryLabel={order.deliveryAddress}
+          status={order.status}
+          driver={order.assignedDriver}
+        />
+        {onOrderUpdated ? (
+          <OrderOperationsPanel order={order} onUpdated={onOrderUpdated} />
+        ) : null}
       </div>
 
       <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">

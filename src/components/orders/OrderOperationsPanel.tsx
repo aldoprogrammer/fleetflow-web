@@ -1,7 +1,7 @@
 "use client";
 
+import { Package, Truck } from "lucide-react";
 import { useState, type ReactElement } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import {
   deliverOrder,
@@ -29,7 +29,6 @@ export function OrderOperationsPanel({
   onUpdated,
 }: OrderOperationsPanelProps): ReactElement | null {
   const session = useAuthStore((state) => state.session);
-  const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,60 +73,47 @@ export function OrderOperationsPanel({
       ? "Confirming pickup..."
       : "Confirming delivery...";
 
+  const Icon = activeOperation.action === "confirm_pickup" ? Package : Truck;
+  const buttonClass =
+    activeOperation.action === "confirm_pickup"
+      ? "bg-amber-600 hover:bg-amber-500"
+      : "bg-emerald-700 hover:bg-emerald-600";
+
   return (
-    <div className="mt-4 max-w-lg overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/15 backdrop-blur-sm">
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-        aria-expanded={isOpen}
-      >
-        <span className="text-sm font-semibold text-white">
-          {isOpsUser ? "Dispatch operations" : "Trip actions"}
-        </span>
-        {isOpen ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-emerald-100/80" />
-        ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-emerald-100/80" />
-        )}
-      </button>
-
-      {isOpen ? (
-        <div className="border-t border-white/10 px-4 pb-4 pt-3">
+    <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            {isOpsUser ? "Dispatch operations" : "Trip actions"}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">{activeOperation.title}</p>
+          <p className="mt-1 max-w-xl text-sm text-slate-600">{activeOperation.description}</p>
           {isOpsUser ? (
-            <p className="rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2.5 text-xs leading-relaxed text-emerald-50/90">
-              Manual confirmations update trip status from the dispatch console. Live map syncs
-              on the driver&apos;s next location ping.
-            </p>
-          ) : null}
-
-          <div className={isOpsUser ? "mt-3" : undefined}>
-            <p className="text-sm font-semibold text-white">{activeOperation.title}</p>
-            <p className="mt-1 text-sm text-emerald-100/80">{activeOperation.description}</p>
-
-            <div className="mt-3 border-t border-white/10 pt-3">
-              <SubmitButton
-                type="button"
-                loading={isSubmitting}
-                loadingLabel={loadingLabel}
-                onClick={() => void handleAction(activeOperation.action)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-              >
-                {activeOperation.buttonLabel}
-              </SubmitButton>
-            </div>
-          </div>
-
-          {error ? (
-            <p
-              role="alert"
-              className="mt-3 rounded-lg border border-rose-300/30 bg-rose-500/15 px-3 py-2 text-sm text-rose-100"
-            >
-              {error}
+            <p className="mt-2 text-xs text-slate-500">
+              Ops can advance trip status on behalf of the assigned driver when needed.
             </p>
           ) : null}
         </div>
+        <SubmitButton
+          type="button"
+          loading={isSubmitting}
+          loadingLabel={loadingLabel}
+          onClick={() => void handleAction(activeOperation.action)}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70 ${buttonClass}`}
+        >
+          <Icon className="h-4 w-4" />
+          {activeOperation.buttonLabel}
+        </SubmitButton>
+      </div>
+
+      {error ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+        >
+          {error}
+        </p>
       ) : null}
-    </div>
+    </section>
   );
 }
