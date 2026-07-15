@@ -3,7 +3,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { login as loginApi } from "@/lib/api/auth";
-import { registerAccessTokenGetter } from "@/lib/api/client";
+import {
+  registerAccessTokenGetter,
+  registerUnauthorizedHandler,
+} from "@/lib/api/client";
 import {
   clearAuthCookies,
   setAuthCookie,
@@ -54,3 +57,17 @@ export const useAuthStore = create<AuthState>()(
 );
 
 registerAccessTokenGetter(() => useAuthStore.getState().session?.accessToken ?? null);
+
+registerUnauthorizedHandler(() => {
+  const state = useAuthStore.getState();
+  if (!state.session) {
+    return;
+  }
+  state.logout();
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    const next = encodeURIComponent(
+      `${window.location.pathname}${window.location.search}`,
+    );
+    window.location.replace(`/login?reason=session_expired&next=${next}`);
+  }
+});

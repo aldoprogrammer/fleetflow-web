@@ -15,6 +15,7 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OrderOperationsPanel } from "@/components/orders/OrderOperationsPanel";
+import { OrderProofPhotosPanel } from "@/components/orders/OrderProofPhotosPanel";
 import { OrderTripMap } from "@/components/orders/OrderTripMap";
 import type { OrderResponse } from "@/lib/api/orders";
 import {
@@ -207,6 +208,7 @@ export function OrderDetailOverview({
         {onOrderUpdated ? (
           <OrderOperationsPanel order={order} onUpdated={onOrderUpdated} />
         ) : null}
+        <OrderProofPhotosPanel order={order} onOrderUpdated={onOrderUpdated} />
       </div>
 
       <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">

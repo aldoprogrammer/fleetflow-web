@@ -25,6 +25,11 @@ export function LoginForm(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<string | null>(null);
+  const reason = searchParams.get("reason");
+  const sessionHint =
+    reason === "session_expired"
+      ? "Your session expired or the database was reset. Please sign in again."
+      : null;
 
   const submitLogin = async (
     nextEmail: string,
@@ -105,6 +110,14 @@ export function LoginForm(): ReactElement {
       </div>
 
       <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-slate-200/50 sm:p-8">
+        {sessionHint ? (
+          <div
+            role="status"
+            className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            {sessionHint}
+          </div>
+        ) : null}
         {error ? (
           <div
             role="alert"

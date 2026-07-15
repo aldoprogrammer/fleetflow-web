@@ -45,6 +45,14 @@ export interface OrderTimelineItem {
   createdAt: string;
 }
 
+export interface OrderPhoto {
+  id: string;
+  type: "DEPARTURE" | "DELIVERY";
+  url: string;
+  uploadedBy: string;
+  createdAt: string;
+}
+
 export interface AssignedDriverSummary {
   id: string;
   fullName: string;
@@ -81,6 +89,9 @@ export interface OrderResponse {
   matchDistanceKm?: number | null;
   assignedDriver?: AssignedDriverSummary | null;
   timeline: OrderTimelineItem[];
+  photos?: OrderPhoto[];
+  departurePhotoCount?: number;
+  deliveryPhotoCount?: number;
   createdAt: string;
 }
 
@@ -133,16 +144,24 @@ export async function estimateOrderPrice(
   return response.data;
 }
 
-export async function deliverOrder(orderId: string): Promise<OrderResponse> {
+export async function deliverOrder(
+  orderId: string,
+  payload: { overrideReason?: string } = {},
+): Promise<OrderResponse> {
   const response = await apiClient.post<OrderResponse>(
     `/orders/${orderId}/deliver`,
+    payload,
   );
   return response.data;
 }
 
-export async function pickupOrder(orderId: string): Promise<OrderResponse> {
+export async function pickupOrder(
+  orderId: string,
+  payload: { overrideReason?: string } = {},
+): Promise<OrderResponse> {
   const response = await apiClient.post<OrderResponse>(
     `/orders/${orderId}/pickup`,
+    payload,
   );
   return response.data;
 }
@@ -156,6 +175,22 @@ export async function createOrder(
 
 export async function getOrder(orderId: string): Promise<OrderResponse> {
   const response = await apiClient.get<OrderResponse>(`/orders/${orderId}`);
+  return response.data;
+}
+
+export async function uploadOrderPhoto(
+  orderId: string,
+  type: "DEPARTURE" | "DELIVERY",
+  file: File,
+): Promise<OrderPhoto> {
+  const formData = new FormData();
+  formData.append("type", type);
+  formData.append("file", file);
+
+  const response = await apiClient.post<OrderPhoto>(
+    `/orders/${orderId}/photos`,
+    formData,
+  );
   return response.data;
 }
 

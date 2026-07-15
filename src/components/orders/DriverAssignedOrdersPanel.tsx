@@ -6,10 +6,10 @@ import { PageSection } from "@/components/ui/PageSection";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { listOrders, type OrderListItem } from "@/lib/api/orders";
+import { subscribeOrdersList } from "@/lib/realtime/bus";
 import { useAuthStore } from "@/stores/auth-store";
 
 const ACTIVE_STATUSES = new Set(["ASSIGNED", "PICKED_UP", "MATCHING", "PENDING"]);
-const POLL_MS = 5_000;
 
 export function DriverAssignedOrdersPanel(): ReactElement {
   const session = useAuthStore((state) => state.session);
@@ -32,12 +32,12 @@ export function DriverAssignedOrdersPanel(): ReactElement {
     }
 
     void load();
-    const intervalId = window.setInterval(() => {
+    const unsubscribe = subscribeOrdersList(() => {
       void load();
-    }, POLL_MS);
+    });
 
     return () => {
-      window.clearInterval(intervalId);
+      unsubscribe();
     };
   }, [load, session?.user.driverId]);
 
@@ -70,7 +70,7 @@ export function DriverAssignedOrdersPanel(): ReactElement {
   return (
     <PageSection
       title="Your assigned trips"
-      description="Open a trip to confirm pickup and mark delivery complete. List refreshes every 5 seconds."
+      description="Open a trip to confirm pickup and mark delivery complete. Updates arrive in real time."
     >
       {orders.length === 0 ? (
         <p className="text-sm text-slate-600">No active trips right now.</p>

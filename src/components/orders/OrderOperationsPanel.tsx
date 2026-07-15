@@ -15,7 +15,10 @@ import {
   resolveActiveOperation,
   type OrderOperationAction,
 } from "@/lib/orders/operations";
+import { emitOrderUpdated } from "@/lib/realtime/bus";
+import { formatOrderReference } from "@/lib/orders/display";
 import { useAuthStore } from "@/stores/auth-store";
+import { useToastStore } from "@/stores/toast-store";
 
 const MIN_ACTION_FEEDBACK_MS = 450;
 
@@ -31,6 +34,7 @@ export function OrderOperationsPanel({
   const session = useAuthStore((state) => state.session);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
 
   const permissions = session?.user.permissions ?? [];
   const canOperate = session
@@ -43,18 +47,62 @@ export function OrderOperationsPanel({
     return null;
   }
 
+  const departureCount = order.departurePhotoCount ?? 0;
+  const deliveryCount = order.deliveryPhotoCount ?? 0;
+  const missingProof =
+    activeOperation.action === "confirm_pickup"
+      ? departureCount < 1
+      : deliveryCount < 1;
+
   const handleAction = async (action: OrderOperationAction): Promise<void> => {
     setError(null);
+
+    if (isOpsUser && missingProof && overrideReason.trim().length < 3) {
+      setError(
+        "Enter an override reason when completing without proof photos.",
+      );
+      return;
+    }
+
+    if (!isOpsUser && missingProof) {
+      setError(
+        action === "confirm_pickup"
+          ? "Please upload at least one departure photo before starting the journey."
+          : "Please upload at least one delivery photo before completing the booking.",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     const startedAt = Date.now();
+    const payload =
+      isOpsUser && missingProof
+        ? { overrideReason: overrideReason.trim() }
+        : {};
 
     try {
       if (action === "confirm_pickup") {
-        onUpdated(await pickupOrder(order.id));
+        const next = await pickupOrder(order.id, payload);
+        onUpdated(next);
+        emitOrderUpdated(order.id, "status");
+        useToastStore.getState().push({
+          id: `pickup-${order.id}-${Date.now()}`,
+          title: "Parcel picked up",
+          body: `Booking ${formatOrderReference(order.id)} marked as picked up.`,
+          href: `/orders/${order.id}`,
+        });
         return;
       }
 
-      onUpdated(await deliverOrder(order.id));
+      const next = await deliverOrder(order.id, payload);
+      onUpdated(next);
+      emitOrderUpdated(order.id, "status");
+      useToastStore.getState().push({
+        id: `deliver-${order.id}-${Date.now()}`,
+        title: "Delivery completed",
+        body: `Booking ${formatOrderReference(order.id)} marked as delivered.`,
+        href: `/orders/${order.id}`,
+      });
     } catch (err) {
       setError(extractApiErrorMessage(err));
     } finally {
@@ -86,11 +134,19 @@ export function OrderOperationsPanel({
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
             {isOpsUser ? "Dispatch operations" : "Trip actions"}
           </p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{activeOperation.title}</p>
-          <p className="mt-1 max-w-xl text-sm text-slate-600">{activeOperation.description}</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">
+            {activeOperation.title}
+          </p>
+          <p className="mt-1 max-w-xl text-sm text-slate-600">
+            {activeOperation.description}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Proof photos: departure {departureCount} · delivery {deliveryCount}
+          </p>
           {isOpsUser ? (
             <p className="mt-2 text-xs text-slate-500">
-              Ops can advance trip status on behalf of the assigned driver when needed.
+              Ops can complete without photos. An override reason is required and
+              written to the audit log.
             </p>
           ) : null}
         </div>
@@ -105,6 +161,21 @@ export function OrderOperationsPanel({
           {activeOperation.buttonLabel}
         </SubmitButton>
       </div>
+
+      {isOpsUser && missingProof ? (
+        <label className="mt-4 block">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+            Override reason
+          </span>
+          <textarea
+            value={overrideReason}
+            onChange={(event) => setOverrideReason(event.target.value)}
+            rows={2}
+            placeholder="Example: driver device failure"
+            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-emerald-500/30 focus:ring-2"
+          />
+        </label>
+      ) : null}
 
       {error ? (
         <p

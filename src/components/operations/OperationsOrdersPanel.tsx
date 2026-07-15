@@ -5,18 +5,39 @@ import { AppLink } from "@/components/ui/AppLink";
 import { PageSection } from "@/components/ui/PageSection";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { listOrders, type OrderListItem } from "@/lib/api/orders";
+import { listOrders, extractApiErrorMessage, type OrderListItem } from "@/lib/api/orders";
+import { subscribeOrdersList } from "@/lib/realtime/bus";
 
 export function OperationsOrdersPanel(): ReactElement {
   const [orders, setOrders] = useState<OrderListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void listOrders()
-      .then(setOrders)
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : "Failed to load orders."),
-      );
+    let cancelled = false;
+
+    const load = async (): Promise<void> => {
+      try {
+        const items = await listOrders();
+        if (!cancelled) {
+          setOrders(items);
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setError(extractApiErrorMessage(err));
+        }
+      }
+    };
+
+    void load();
+    const unsubscribe = subscribeOrdersList(() => {
+      void load();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
 
   if (error) {
@@ -54,7 +75,18 @@ export function OperationsOrdersPanel(): ReactElement {
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => (
+                {orders.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-10 text-center text-sm text-slate-500"
+                    >
+                      No orders yet. Create one as merchant, or re-seed only if you
+                      intentionally reset the demo database.
+                    </td>
+                  </tr>
+                ) : null}
+                {orders.map((order) => (
               <tr key={order.id} className="border-b border-slate-100">
                 <td className="px-3 py-3">
                   <AppLink

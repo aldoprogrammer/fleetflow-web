@@ -4,7 +4,9 @@ export type ApiNotificationType =
   | "ORDER_ASSIGNED"
   | "ORDER_PICKED_UP"
   | "ORDER_DELIVERED"
-  | "ORDER_CANCELLED";
+  | "ORDER_CANCELLED"
+  | "DEPARTURE_PHOTO_UPLOADED"
+  | "DELIVERY_PHOTO_UPLOADED";
 
 export interface ApiNotification {
   id: string;

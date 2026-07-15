@@ -76,3 +76,27 @@ export function resolveActiveOperation(
 export function resolvePaymentStatus(order: OrderResponse): ApiOrderPaymentStatus {
   return order.paymentStatus ?? resolveOrderPaymentStatus(order.status);
 }
+
+export function canUploadDepartureProof(
+  status: ApiOrderStatus,
+  permissions: readonly string[],
+  order: OrderResponse,
+  driverId: string | null | undefined,
+): boolean {
+  return (
+    status === "ASSIGNED" &&
+    canManageOrderOperations(permissions, order, driverId)
+  );
+}
+
+export function canUploadDeliveryProof(
+  status: ApiOrderStatus,
+  permissions: readonly string[],
+  order: OrderResponse,
+  driverId: string | null | undefined,
+): boolean {
+  return (
+    status === "PICKED_UP" &&
+    canManageOrderOperations(permissions, order, driverId)
+  );
+}

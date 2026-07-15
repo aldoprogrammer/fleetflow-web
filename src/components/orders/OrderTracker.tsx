@@ -16,29 +16,17 @@ import {
   type ApiOrderStatus,
   type OrderResponse,
 } from "@/lib/api/orders";
+import { subscribeOrderUpdates } from "@/lib/realtime/bus";
 
 interface OrderTrackerProps {
   orderId: string;
 }
 
 const TERMINAL_STATUSES: ApiOrderStatus[] = ["DELIVERED", "CANCELLED"];
-/** Keep polling through in-trip statuses so merchant/web sees Flutter pickup/deliver live. */
-const POLLING_STATUSES: ApiOrderStatus[] = [
-  "DRAFT",
-  "PENDING",
-  "MATCHING",
-  "ASSIGNED",
-  "PICKED_UP",
-];
-
-function shouldPollStatus(status: ApiOrderStatus): boolean {
-  return POLLING_STATUSES.includes(status);
-}
 
 export function OrderTracker({ orderId }: OrderTrackerProps): ReactElement {
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [displayNow, setDisplayNow] = useState(() => Date.now());
@@ -53,13 +41,8 @@ export function OrderTracker({ orderId }: OrderTrackerProps): ReactElement {
         const next = await getOrder(orderId);
         setOrder(next);
         setError(null);
-
-        if (TERMINAL_STATUSES.includes(next.status) || !shouldPollStatus(next.status)) {
-          setIsPolling(false);
-        }
-      } catch (pollError) {
-        setError(extractApiErrorMessage(pollError));
-        setIsPolling(false);
+      } catch (fetchError) {
+        setError(extractApiErrorMessage(fetchError));
       } finally {
         setIsInitialLoading(false);
         setIsRefreshing(false);
@@ -73,18 +56,20 @@ export function OrderTracker({ orderId }: OrderTrackerProps): ReactElement {
   }, [fetchOrder]);
 
   useEffect(() => {
-    if (!isPolling) {
-      return;
-    }
+    return subscribeOrderUpdates((updatedOrderId) => {
+      if (updatedOrderId === orderId) {
+        void fetchOrder(true);
+      }
+    });
+  }, [fetchOrder, orderId]);
 
-    const intervalId = window.setInterval(() => {
+  // Safety net if SSE is down — keep booking detail fresh while the page is open.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
       void fetchOrder(true);
-    }, 3000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [fetchOrder, isPolling]);
+    }, 8_000);
+    return () => window.clearInterval(timer);
+  }, [fetchOrder]);
 
   useEffect(() => {
     if (!order) return;
@@ -137,9 +122,6 @@ export function OrderTracker({ orderId }: OrderTrackerProps): ReactElement {
           !isCancelled
             ? (next) => {
                 setOrder(next);
-                if (TERMINAL_STATUSES.includes(next.status) || !shouldPollStatus(next.status)) {
-                  setIsPolling(false);
-                }
               }
             : undefined
         }

@@ -10,6 +10,7 @@ import {
   type ApiNotification,
 } from "@/lib/api/notifications";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { subscribeRealtimeNotifications } from "@/lib/realtime/bus";
 import { useAuthStore } from "@/stores/auth-store";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactElement } from "react";
@@ -36,10 +37,9 @@ export function NotificationsPageContent(): ReactElement {
 
   useEffect(() => {
     void refresh();
-    const id = window.setInterval(() => {
+    return subscribeRealtimeNotifications(() => {
       void refresh();
-    }, 5000);
-    return () => window.clearInterval(id);
+    });
   }, [refresh]);
 
   if (!canRead) {

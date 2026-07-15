@@ -11,9 +11,14 @@ export const apiClient = axios.create({
 });
 
 let accessTokenGetter: (() => string | null) | null = null;
+let onUnauthorized: (() => void) | null = null;
 
 export function registerAccessTokenGetter(getter: () => string | null): void {
   accessTokenGetter = getter;
+}
+
+export function registerUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -27,5 +32,23 @@ apiClient.interceptors.request.use((config) => {
     delete config.headers.Authorization;
   }
 
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const url = String(error.config?.url ?? "");
+      const isLogin = url.includes("/auth/login");
+      if (!isLogin) {
+        onUnauthorized?.();
+      }
+    }
+    return Promise.reject(error);
+  },
+);

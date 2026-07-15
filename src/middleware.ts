@@ -19,6 +19,7 @@ const PROTECTED_PREFIXES = [
   "/merchants",
   "/ledger",
   "/admin",
+  "/notifications",
   "/forbidden",
 ];
 
@@ -86,5 +87,6 @@ export const config = {
     "/merchants",
     "/ledger",
     "/admin/:path*",
+    "/notifications",
   ],
 };

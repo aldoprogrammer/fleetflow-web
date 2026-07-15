@@ -12,6 +12,9 @@ import {
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useToastStore } from "@/stores/toast-store";
+import {
+  subscribeRealtimeNotifications,
+} from "@/lib/realtime/bus";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 
@@ -81,10 +84,35 @@ export function NotificationBell(): ReactElement | null {
   useEffect(() => {
     if (!canRead) return;
     void refresh(false);
-    const id = window.setInterval(() => {
+    const unsubscribe = subscribeRealtimeNotifications((payload) => {
+      if (seenIds.current.has(payload.notificationId)) {
+        return;
+      }
+      seenIds.current.add(payload.notificationId);
+      const pushToast = useToastStore.getState().push;
+      pushToast({
+        id: payload.notificationId,
+        title: payload.title,
+        body: payload.body,
+        href: payload.orderId ? `/orders/${payload.orderId}` : "/notifications",
+      });
+      if (typeof window !== "undefined" && "Notification" in window) {
+        if (Notification.permission === "granted") {
+          new Notification(payload.title, { body: payload.body });
+        }
+      }
+      void refresh(false);
+    });
+
+    // Safety net if SSE is down — announce newly unread inbox items.
+    const poll = window.setInterval(() => {
       void refresh(true);
-    }, 4000);
-    return () => window.clearInterval(id);
+    }, 8_000);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(poll);
+    };
   }, [canRead, refresh]);
 
   useEffect(() => {
