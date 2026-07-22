@@ -1,38 +1,30 @@
 # fleetflow-web
 
-
-
 > **FleetFlow Production Board** · [View Kanban Board →](https://github.com/users/aldoprogrammer/projects/2)
-
-
 
 Next.js enterprise operations portal for FleetFlow (auth, RBAC, dispatch, tracking).
 
+### Demo Video
 
+<a href="https://youtu.be/H42nrwHixqI" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/H42nrwHixqI/maxresdefault.jpg" alt="FleetFlow Web Demo Video" />
+</a>
+
+### Screenshots & UI preview
+
+Full gallery (dashboard, notifications, create order, map picker, proof photos, fleet, ledger): **[docs/web-version-visual-preview/WEB_VERSION_VISUAL_PREVIEW.md](./docs/web-version-visual-preview/WEB_VERSION_VISUAL_PREVIEW.md)**
 
 ## Stack
 
-
-
 - Next.js 15 App Router · React 19 · Zustand · Tailwind CSS
-
 - Formik · Yup · Lucide · Auto Animate
-
-
 
 ## Quick start
 
-
-
 ```bash
-
 pnpm install
-
 pnpm run dev    # http://localhost:3001
-
 ```
-
-
 
 API must run at `http://localhost:3000` (see `fleetflow-infra` + `fleetflow-api`).
 
@@ -40,37 +32,22 @@ API must run at `http://localhost:3000` (see `fleetflow-infra` + `fleetflow-api`
 
 ## Features
 
-
-
 - JWT login + 6 demo RBAC personas
-
 - Middleware + client `RouteGuard` permission enforcement
-
 - Enterprise dashboard with KPI MoM metrics
-
 - Order create + live tracker with skeleton loading
-
+- Proof-of-delivery photos + SSE realtime sync
 - Reusable UI kit (`AppLink`, skeletons, overlays)
-
-
 
 ## Documentation
 
-
-
 | Doc | Content |
-
 |-----|---------|
-
+| [docs/web-version-visual-preview/WEB_VERSION_VISUAL_PREVIEW.md](./docs/web-version-visual-preview/WEB_VERSION_VISUAL_PREVIEW.md) | Web UI screenshot gallery |
 | [docs/COMPONENTS.md](./docs/COMPONENTS.md) | Reusable component catalog |
-
 | [docs/WEB_PATTERNS.md](./docs/WEB_PATTERNS.md) | Auth, RBAC, loading, navigation |
-
 | [../.cursor/skills/fleetflow-web-ui/SKILL.md](../.cursor/skills/fleetflow-web-ui/SKILL.md) | Agent skill for UI work |
-
 | [../.cursor/skills/fleetflow-rbac-portal/SKILL.md](../.cursor/skills/fleetflow-rbac-portal/SKILL.md) | Agent skill for portal RBAC |
-
-
 
 ## Testing & QA
 
@@ -118,49 +95,25 @@ Full guide: [fleetflow-docs/QA_TESTING.md](../fleetflow-docs/QA_TESTING.md)
 
 Portfolio architecture diagram + video script: [fleetflow-docs/ARCHITECTURE.md](../fleetflow-docs/ARCHITECTURE.md)
 
-
-
 ## Key paths
 
-
-
 ```
-
 src/components/ui/       # Reusable primitives + skeletons
-
 src/lib/auth/            # RBAC, access rules, session
-
 src/lib/navigation/      # Nav icons, quick-action copy
-
 src/hooks/useAppNavigation.ts
-
 ```
-
-
 
 ## Related repos
 
-
-
 | Repo | Role |
-
 |------|------|
-
 | [fleetflow-api](../fleetflow-api) | Backend API |
-
 | [fleetflow-shared](../fleetflow-shared) | Shared contracts |
-
 | [fleetflow-app](../fleetflow-app) | Driver mobile app |
-
 | [fleetflow-infra](../fleetflow-infra) | Docker & local HA |
-
 | [fleetflow-docs](../fleetflow-docs) | Architecture docs |
-
-
 
 ## GitHub About (recommended)
 
-
-
 Set **Website** in repo **About** → `https://github.com/users/aldoprogrammer/projects/2`
-
